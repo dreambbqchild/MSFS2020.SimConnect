@@ -24,7 +24,7 @@ private:
 protected:
     void Add(const char* datumName, const char* unitsName, SIMCONNECT_DATATYPE datumType = SIMCONNECT_DATATYPE_FLOAT64, float epsilon = 0, DWORD datumID = SIMCONNECT_UNUSED)
     {
-        auto hr = SimConnect_AddToDataDefinition(hSimConnect, (SIMCONNECT_DATA_DEFINITION_ID)defineId, datumName, unitsName, datumType, epsilon, datumID);
+        SimConnect_AddToDataDefinition(hSimConnect, (SIMCONNECT_DATA_DEFINITION_ID)defineId, datumName, unitsName, datumType, epsilon, datumID);
     }
 
 public:    
