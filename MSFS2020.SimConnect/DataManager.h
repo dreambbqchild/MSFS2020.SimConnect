@@ -32,7 +32,7 @@ public:
 
     void StartRequesting()
     {
-        SimConnect_RequestDataOnSimObject(hSimConnect, (SIMCONNECT_DATA_REQUEST_ID)requestId, (SIMCONNECT_DATA_DEFINITION_ID)defineId, SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD_SECOND, SIMCONNECT_DATA_REQUEST_FLAG_DEFAULT);
+        SimConnect_RequestDataOnSimObject(hSimConnect, (SIMCONNECT_DATA_REQUEST_ID)requestId, (SIMCONNECT_DATA_DEFINITION_ID)defineId, SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD_VISUAL_FRAME, SIMCONNECT_DATA_REQUEST_FLAG_DEFAULT);
     }
     
     virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size) PURE;
@@ -54,7 +54,7 @@ public:
     virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size)
     {
         auto model = (const PositionModel*)ptrData;
-        sprintf_s(buffer, size, "XGPSMSFS,%0.3f,%0.3f,%0.2f,%0.2f,%0.2f",
+        sprintf_s(buffer, size, "XGPSMSFS,%lf,%lf,%lf,%lf,%lf",
             model->Longitude,
             model->Latitude,
             model->Altitude,
@@ -80,7 +80,7 @@ public:
     virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size)
     {
         auto model = (const AttitudeModel*)ptrData;
-        sprintf_s(buffer, size, "XATTMSFS,%0.3f,%0.3f,%0.3f",
+        sprintf_s(buffer, size, "XATTMSFS,%lf,%lf,%lf",
             model->TrueHeading,
             -model->Pitch,
             -model->Bank

@@ -1,12 +1,33 @@
 #include <iostream>
+#include <thread>
 #include "BroadcastSocket.h"
 #include "DataManager.h"
 
+#define ESC "\x1B"
+#define ClearLine ESC "[2K"
+#define MoveToTemplate ESC "[%d;%dH"
+#define BUFFER_SIZE 128
 bool hasQuit = false;
 
 PositionDataManager* position;
 AttitudeDataManager* attitude;
 BroadcastSocket broadcastSocket;
+
+struct ConsoleData {
+    char Position[BUFFER_SIZE];
+    char Attitude[BUFFER_SIZE];
+};
+ConsoleData liveData = { 0 };
+
+void PrintState() 
+{
+    while (!hasQuit) 
+    {
+        ConsoleData copiedData = liveData;
+        printf(MoveToTemplate ClearLine "%s\r\n" ClearLine "%s", 2, 1, copiedData.Position, copiedData.Attitude);
+        Sleep(1000);
+    }
+}
 
 void CALLBACK MessageProc(SIMCONNECT_RECV* pData, DWORD cbData, void* pContext)
 {
@@ -14,28 +35,27 @@ void CALLBACK MessageProc(SIMCONNECT_RECV* pData, DWORD cbData, void* pContext)
     {
     case SIMCONNECT_RECV_ID_SIMOBJECT_DATA:
     {
-        char buffer[128] = {0};
         auto pObjData = (SIMCONNECT_RECV_SIMOBJECT_DATA*)pData;
+        char* buffer = nullptr;
+        ConsoleData workingData = liveData;
         DataManager* manager = nullptr;
 
         switch ((RequestId)pObjData->dwRequestID)
         {
         case RequestId::Position:
-        {
             manager = position;
+            buffer = workingData.Position;
             break;
-        }
-        break;
         case RequestId::Attitude:
-        {
             manager = attitude;
+            buffer = workingData.Attitude;
             break;
-        }
         default:
             return;
         }
 
-        broadcastSocket.Send(manager->Convert(&pObjData->dwData, buffer, sizeof(buffer)));
+        broadcastSocket.Send(manager->Convert(&pObjData->dwData, buffer, BUFFER_SIZE));
+        liveData = workingData;
         break;
     }
 
@@ -50,8 +70,23 @@ void CALLBACK MessageProc(SIMCONNECT_RECV* pData, DWORD cbData, void* pContext)
     }
 }
 
+HANDLE InitConsole() 
+{
+    auto hOut = GetStdHandle(STD_OUTPUT_HANDLE);    
+    DWORD dwMode = 0;
+    if (!GetConsoleMode(hOut, &dwMode))
+        return nullptr;
+
+    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    if (!SetConsoleMode(hOut, dwMode))
+        return nullptr;
+
+    return hOut;
+}
+
 int main()
 {       
+    InitConsole();
     HANDLE hSimConnect = nullptr;
     auto hEventHandle = ::CreateEvent(NULL, FALSE, FALSE, NULL);
     if (!hEventHandle) {
@@ -62,7 +97,8 @@ int main()
     BroadcastSocket::Starting();
 
     if (SUCCEEDED(SimConnect_Open(&hSimConnect, "MSFS2020.SimConnect", nullptr, 0, hEventHandle, SIMCONNECT_OPEN_CONFIGINDEX_LOCAL)))
-    {        
+    {   
+        std::thread printState(PrintState);
         std::cout << "Connected!" <<  std::endl;        
         
         broadcastSocket.Open();
@@ -75,6 +111,7 @@ int main()
         while (!hasQuit && ::WaitForSingleObject(hEventHandle, INFINITE) == WAIT_OBJECT_0)
             SimConnect_CallDispatch(hSimConnect, MessageProc, NULL);
                   
+        printState.join();
         delete position;
         delete attitude;
         broadcastSocket.Close();        
