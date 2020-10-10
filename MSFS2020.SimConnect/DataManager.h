@@ -1,40 +1,46 @@
 #pragma once
-#include <windows.h>
-#include <simconnect.h>
+#include "includes.h"
 #include "Models.h"
 #include "BroadcastSocket.h"
 
+const int About42Miles = 67593;
+
 enum class RequestId : DWORD {
+    None,
     Position,
-    Attitude
+    Attitude,
+    Aircraft,
+    Helicopter
 };
 
 enum class DataDefinitionId : DWORD {
     Position,
-    Attitude
+    Attitude,
+    Traffic
 };
 
 class DataManager
 {
-private:    
-    HANDLE hSimConnect;
-    DataDefinitionId defineId;
+private:
     const RequestId requestId;
 
 protected:
-    void Add(const char* datumName, const char* unitsName, SIMCONNECT_DATATYPE datumType = SIMCONNECT_DATATYPE_FLOAT64, float epsilon = 0, DWORD datumID = SIMCONNECT_UNUSED)
+    const HANDLE hSimConnect;
+    const DataDefinitionId defineId;    
+
+    inline void Add(const char* datumName, const char* unitsName, SIMCONNECT_DATATYPE datumType = SIMCONNECT_DATATYPE_FLOAT64, float epsilon = 0, DWORD datumID = SIMCONNECT_UNUSED)
     {
         SimConnect_AddToDataDefinition(hSimConnect, (SIMCONNECT_DATA_DEFINITION_ID)defineId, datumName, unitsName, datumType, epsilon, datumID);
     }
 
 public:    
-    DataManager(HANDLE hSimConnect, DataDefinitionId defineId, RequestId requestId) : hSimConnect(hSimConnect), requestId(requestId), defineId(defineId) { }
+    DataManager(HANDLE hSimConnect, DataDefinitionId defineId, RequestId requestId = RequestId::None) : hSimConnect(hSimConnect), requestId(requestId), defineId(defineId) { }
 
-    void StartRequesting()
+    inline void StartRequesting()
     {
         SimConnect_RequestDataOnSimObject(hSimConnect, (SIMCONNECT_DATA_REQUEST_ID)requestId, (SIMCONNECT_DATA_DEFINITION_ID)defineId, SIMCONNECT_OBJECT_ID_USER, SIMCONNECT_PERIOD_VISUAL_FRAME, SIMCONNECT_DATA_REQUEST_FLAG_DEFAULT);
     }
-    
+
     virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size) PURE;
     virtual ~DataManager() {}
 };
@@ -42,51 +48,38 @@ public:
 class PositionDataManager : public DataManager
 {
 public:
-    PositionDataManager(HANDLE hSimConnect) : DataManager(hSimConnect, DataDefinitionId::Position, RequestId::Position) 
-    {
-        Add("PLANE LATITUDE", "Degrees");
-        Add("PLANE LONGITUDE", "Degrees");
-        Add("PLANE ALTITUDE", "Meters");
-        Add("GPS GROUND TRUE TRACK", "Degrees");
-        Add("GPS GROUND SPEED", "Meters per second");
-    }    
+    PositionDataManager(HANDLE hSimConnect);
 
-    virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size)
-    {
-        auto model = (const PositionModel*)ptrData;
-        sprintf_s(buffer, size, "XGPSMSFS,%lf,%lf,%lf,%lf,%lf",
-            model->Longitude,
-            model->Latitude,
-            model->Altitude,
-            model->GroundTrack,
-            model->GroundSpeed
-        );
-
-        return buffer;
-    }
+    virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size);
     virtual ~PositionDataManager() {}
 };
 
 class AttitudeDataManager : public DataManager
 {
 public:
-    AttitudeDataManager(HANDLE hSimConnect) : DataManager(hSimConnect, DataDefinitionId::Attitude, RequestId::Attitude) 
-    {
-        Add("PLANE PITCH DEGREES", "Degrees");
-        Add("PLANE BANK DEGREES", "Degrees");
-        Add("PLANE HEADING DEGREES TRUE", "Degrees");
-    }    
+    AttitudeDataManager(HANDLE hSimConnect);
 
-    virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size)
-    {
-        auto model = (const AttitudeModel*)ptrData;
-        sprintf_s(buffer, size, "XATTMSFS,%lf,%lf,%lf",
-            model->TrueHeading,
-            -model->Pitch,
-            -model->Bank
-        );
-
-        return buffer;
-    }
+    virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size);
     virtual ~AttitudeDataManager() {}
+};
+
+class TrafficDataManager : public DataManager
+{
+private:
+    bool runPoll;
+    intptr_t* pollPtr;
+
+    inline void RequestTrafficData(RequestId requestId, SIMCONNECT_SIMOBJECT_TYPE type)
+    {
+        SimConnect_RequestDataOnSimObjectType(hSimConnect, (SIMCONNECT_DATA_REQUEST_ID)requestId, (SIMCONNECT_DATA_DEFINITION_ID)defineId, About42Miles, type);
+    }
+
+public:
+    TrafficDataManager(HANDLE hSimConnect);
+
+    virtual const char* Convert(const DWORD* ptrData, char* buffer, size_t size);
+    virtual void StartRequesting();
+    void StopRequesting();
+
+    virtual ~TrafficDataManager();
 };

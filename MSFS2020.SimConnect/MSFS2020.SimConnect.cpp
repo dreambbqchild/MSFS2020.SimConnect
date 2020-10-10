@@ -6,16 +6,17 @@
 #define ESC "\x1B"
 #define ClearLine ESC "[2K"
 #define MoveToTemplate ESC "[%d;%dH"
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE 256
 bool hasQuit = false;
 
 PositionDataManager* position;
 AttitudeDataManager* attitude;
+TrafficDataManager* traffic;
 BroadcastSocket broadcastSocket;
 
 struct ConsoleData {
     char Position[BUFFER_SIZE];
-    char Attitude[BUFFER_SIZE];
+    char Attitude[BUFFER_SIZE];    
 };
 ConsoleData liveData = { 0 };
 
@@ -33,6 +34,19 @@ void CALLBACK MessageProc(SIMCONNECT_RECV* pData, DWORD cbData, void* pContext)
 {
     switch (pData->dwID)
     {
+    case SIMCONNECT_RECV_ID_SIMOBJECT_DATA_BYTYPE:
+    {
+        char buffer[BUFFER_SIZE] = {0};
+        TrafficModel model = { };
+        auto objData = (SIMCONNECT_RECV_SIMOBJECT_DATA_BYTYPE*)pData;
+        if (objData->dwObjectID == SIMCONNECT_OBJECT_ID_USER || objData->dwDefineID != (DWORD)DataDefinitionId::Traffic)
+            return;      
+
+        memcpy(&model, &objData->dwData, sizeof(TrafficModelRaw));
+        model.ObjectId = objData->dwObjectID;
+        broadcastSocket.Send(traffic->Convert((DWORD*)&model, buffer, BUFFER_SIZE));
+    }
+    break;
     case SIMCONNECT_RECV_ID_SIMOBJECT_DATA:
     {
         auto pObjData = (SIMCONNECT_RECV_SIMOBJECT_DATA*)pData;
@@ -104,9 +118,11 @@ int main()
         broadcastSocket.Open();
         position = new PositionDataManager(hSimConnect);
         attitude = new AttitudeDataManager(hSimConnect);
+        traffic = new TrafficDataManager(hSimConnect);
 
         position->StartRequesting();
         attitude->StartRequesting();
+        traffic->StartRequesting();
 
         while (!hasQuit && ::WaitForSingleObject(hEventHandle, INFINITE) == WAIT_OBJECT_0)
             SimConnect_CallDispatch(hSimConnect, MessageProc, NULL);
@@ -114,6 +130,7 @@ int main()
         printState.join();
         delete position;
         delete attitude;
+        delete traffic;
         broadcastSocket.Close();        
         SimConnect_Close(hSimConnect);
         CloseHandle(hEventHandle);

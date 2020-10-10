@@ -85,11 +85,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BroadcastSocket.cpp" />
+    <ClCompile Include="DataManager.cpp" />
     <ClCompile Include="MSFS2020.SimConnect.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BroadcastSocket.h" />
     <ClInclude Include="DataManager.h" />
+    <ClInclude Include="includes.h" />
     <ClInclude Include="Models.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
